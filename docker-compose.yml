@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  vite_app:
+    build: .
+    container_name: cctv_web
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./node_modules
+    restart: unless-stopped
+    command: npm run dev -- --host
