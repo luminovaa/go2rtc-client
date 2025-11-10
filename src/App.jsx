@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, RefreshCw, Maximize2, AlertCircle, Minimize2 } from 'lucide-react';
+import { Video, RefreshCw, Maximize2, Minimize2, Thermometer, Droplets, Cloud, Wind, Activity } from 'lucide-react';
 
-export default function CCTVViewer() {
+export default function CCTVWithSensors() {
   const [streams] = useState([
     { id: 'cctv_1', name: 'CCTV 1', location: '192.168.140.19' },
     { id: 'cctv_2', name: 'CCTV 2', location: '192.168.130.9' }
@@ -10,7 +10,118 @@ export default function CCTVViewer() {
   const [streamStates, setStreamStates] = useState({});
   const iframeRefs = useRef({});
 
+  // MQTT Sensor Data
+  const [sensorData, setSensorData] = useState({
+    temperature: null,
+    humidity: null,
+    rain: null,
+    wind: null,
+    last_update: null,
+    connected: false
+  });
+
   const GO2RTC_URL = 'http://114.9.13.244:1984';
+
+  // MQTT Connection using WebSocket
+  useEffect(() => {
+    let client = null;
+    
+    const connectMQTT = async () => {
+      try {
+        // Import Paho MQTT from CDN
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js';
+        script.async = true;
+        
+        script.onload = () => {
+          const clientId = 'web_client_' + Math.random().toString(16).substr(2, 8);
+          
+          // WebSocket connection to HiveMQ Cloud
+          client = new window.Paho.MQTT.Client(
+            '9390924f12534e95a2c2a456f5e485b0.s1.eu.hivemq.cloud',
+            8884, // WebSocket Secure port
+            clientId
+          );
+
+          client.onConnectionLost = (responseObject) => {
+            if (responseObject.errorCode !== 0) {
+              console.log('❌ Connection lost:', responseObject.errorMessage);
+              setSensorData(prev => ({ ...prev, connected: false }));
+              // Try to reconnect after 5 seconds
+              setTimeout(connectMQTT, 5000);
+            }
+          };
+
+          client.onMessageArrived = (message) => {
+            try {
+              console.log('📨 Raw MQTT message:', message.payloadString);
+              const data = JSON.parse(message.payloadString);
+              console.log('📊 Parsed data:', data);
+              
+              // Update sensor data dengan format yang sama seperti Python backend
+              setSensorData({
+                temperature: data.temperature,
+                humidity: data.humidity,
+                rain: data.rain,
+                wind: data.wind,
+                last_update: new Date().toLocaleString('id-ID', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                }).replace(/\//g, '-'),
+                connected: true
+              });
+              
+              console.log('✅ Sensor data updated successfully!');
+            } catch (error) {
+              console.error('❌ Parse error:', error);
+              console.error('Raw payload:', message.payloadString);
+            }
+          };
+
+          const options = {
+            userName: 'kandang',
+            password: '@Bismillah2025',
+            useSSL: true,
+            timeout: 10,
+            keepAliveInterval: 60,
+            onSuccess: () => {
+              console.log('✅ Connected to MQTT Broker');
+              setSensorData(prev => ({ ...prev, connected: true }));
+              client.subscribe('weather/sensors');
+            },
+            onFailure: (error) => {
+              console.error('❌ Connection failed:', error);
+              setSensorData(prev => ({ ...prev, connected: false }));
+              setTimeout(connectMQTT, 5000);
+            }
+          };
+
+          client.connect(options);
+        };
+
+        script.onerror = () => {
+          console.error('❌ Failed to load MQTT library');
+        };
+
+        document.body.appendChild(script);
+      } catch (error) {
+        console.error('❌ MQTT setup error:', error);
+      }
+    };
+
+    connectMQTT();
+
+    return () => {
+      if (client && client.isConnected()) {
+        client.disconnect();
+      }
+    };
+  }, []);
 
   const reloadStream = (streamId) => {
     setStreamStates(prev => ({ ...prev, [streamId]: 'loading' }));
@@ -34,7 +145,6 @@ export default function CCTVViewer() {
   };
 
   useEffect(() => {
-    // Initialize loading state
     streams.forEach(stream => {
       setStreamStates(prev => ({ ...prev, [stream.id]: 'loading' }));
     });
@@ -67,25 +177,93 @@ export default function CCTVViewer() {
     }
   };
 
+  const SensorCard = ({ icon: Icon, label, value, unit, color }) => (
+    <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+      <div className="flex items-center gap-3">
+        <div className={`p-2.5 rounded-lg ${color}`}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+        <div className="flex-1">
+          <p className="text-xs text-gray-500 font-medium">{label}</p>
+          <p className="text-2xl font-bold text-gray-800">
+            {value !== null ? `${value}${unit}` : '--'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
+        <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-xl shadow-lg">
               <Video className="w-7 h-7 text-white" />
             </div>
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                CCTV Monitoring
+                CCTV Monitoring System
               </h1>
-              <p className="text-sm text-gray-500 mt-0.5">Real-time surveillance system</p>
+              <p className="text-sm text-gray-500 mt-0.5">Real-time surveillance & weather monitoring</p>
             </div>
+          </div>
+          
+          {/* MQTT Status */}
+          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-md border border-gray-200">
+            <div className={`w-2 h-2 rounded-full ${sensorData.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-sm font-medium text-gray-700">
+              {sensorData.connected ? 'MQTT Connected' : 'MQTT Disconnected'}
+            </span>
           </div>
         </div>
 
-        {/* Grid Layout */}
+        {/* Sensor Dashboard */}
+        <div className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-800">Weather Sensors</h2>
+            {sensorData.last_update && (
+              <span className="text-xs text-gray-500 ml-auto">
+                Last update: {sensorData.last_update}
+              </span>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <SensorCard
+              icon={Thermometer}
+              label="Temperature"
+              value={sensorData.temperature}
+              unit="°C"
+              color="bg-gradient-to-br from-red-500 to-orange-500"
+            />
+            <SensorCard
+              icon={Droplets}
+              label="Humidity"
+              value={sensorData.humidity}
+              unit="%"
+              color="bg-gradient-to-br from-blue-500 to-cyan-500"
+            />
+            <SensorCard
+              icon={Cloud}
+              label="Rain"
+              value={sensorData.rain}
+              unit=""
+              color="bg-gradient-to-br from-gray-500 to-slate-600"
+            />
+            {/* <SensorCard
+              icon={Wind}
+              label="Wind"
+              value={sensorData.wind}
+              unit=" m/s"
+              color="bg-gradient-to-br from-teal-500 to-emerald-500"
+            /> */}
+          </div>
+        </div>
+
+        {/* CCTV Grid */}
         <div className={`grid gap-6 ${fullscreen ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
           {streams.map((stream) => {
             if (fullscreen && fullscreen !== stream.id) return null;
@@ -100,7 +278,6 @@ export default function CCTVViewer() {
                   fullscreen === stream.id ? 'fixed inset-4 z-50' : ''
                 }`}
               >
-                {/* Stream Header */}
                 <div className="bg-gradient-to-r from-gray-50 to-white px-5 py-4 flex items-center justify-between border-b border-gray-200">
                   <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(status)} shadow-md`} />
@@ -132,7 +309,6 @@ export default function CCTVViewer() {
                   </div>
                 </div>
 
-                {/* Stream Container */}
                 <div className={`relative bg-gradient-to-br from-gray-900 to-black ${
                   fullscreen === stream.id ? 'h-[calc(100vh-8rem)]' : 'aspect-video'
                 }`}>
@@ -159,7 +335,6 @@ export default function CCTVViewer() {
                   />
                 </div>
 
-                {/* Stream Info Footer */}
                 <div className="bg-gradient-to-r from-gray-50 to-white px-5 py-3 text-xs text-gray-500 border-t border-gray-200 flex items-center justify-between">
                   <span className="font-medium">WebRTC Mode</span>
                   <a 

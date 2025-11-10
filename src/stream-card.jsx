@@ -18,7 +18,7 @@ export default function Go2RTCPlayer({ src }) {
             videoRef.current.srcObject = event.streams[0];
             setLoading(false);
           }
-        };
+        };                                                                                                                                    
 
         const offer = await pc.createOffer({
           offerToReceiveVideo: true,
