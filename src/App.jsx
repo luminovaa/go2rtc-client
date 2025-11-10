@@ -231,7 +231,7 @@ export default function CCTVWithSensors() {
             )}
           </div>
           
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <SensorCard
               icon={Thermometer}
               label="Temperature"
@@ -253,13 +253,13 @@ export default function CCTVWithSensors() {
               unit=""
               color="bg-gradient-to-br from-gray-500 to-slate-600"
             />
-            {/* <SensorCard
+            <SensorCard
               icon={Wind}
               label="Wind"
               value={sensorData.wind}
               unit=" m/s"
               color="bg-gradient-to-br from-teal-500 to-emerald-500"
-            /> */}
+            />
           </div>
         </div>
 
